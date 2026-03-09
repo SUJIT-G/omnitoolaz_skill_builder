@@ -31,7 +31,7 @@ class OmniToolazApp extends StatelessWidget {
           secondary: const Color(0xFF1CB0F6), // Blue
         ),
       ),
-      home: const MainNavigation(),
+      home: const LoginScreen(),
     );
   }
 }
