@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:permission_handler/permission_handler.dart';
 import '../models/badge_system.dart';
 import '../api/api_service.dart';
 
 class ChatScreen extends StatefulWidget { const ChatScreen({super.key}); @override State<ChatScreen> createState() => _ChatScreenState(); }
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _c = TextEditingController();
-  final List<Map<String, String>> _msgs = [{"role": "ai", "text": "Hi! I am Nova. Tap the mic to speak, or type a message!"}];
+  final List<Map<String, String>> _msgs = [{"role": "ai", "text": "Hi! I am Nova. Let's speak English, Hindi, or Bengali! Tap the mic to talk."}];
   
-  // Voice Engines
   final FlutterTts _tts = FlutterTts();
   final stt.SpeechToText _speech = stt.SpeechToText();
   
@@ -20,17 +20,47 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _tts.setLanguage("en-IN"); // Default to Indian English
-    _tts.setSpeechRate(0.5);
+    _initTts();
   }
 
-  // MICROPHONE FUNCTION
+  // Safely initialize speaker
+  void _initTts() async {
+    await _tts.setLanguage("en-US");
+    await _tts.setSpeechRate(0.5);
+    await _tts.setVolume(1.0);
+  }
+
+  // Safely trigger speaker
+  void _speak(String text) async {
+    try {
+      await _tts.speak(text);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error: Could not play audio.")));
+    }
+  }
+
+  // Safely trigger microphone with permissions popup
   void _listen() async {
+    // 1. Force the Android Permission Popup!
+    PermissionStatus status = await Permission.microphone.request();
+    if (status != PermissionStatus.granted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Microphone permission denied!")));
+      return;
+    }
+
     if (!_isListening) {
-      bool available = await _speech.initialize(onStatus: (val) => print('onStatus: $val'), onError: (val) => print('onError: $val'));
+      bool available = await _speech.initialize(
+        onStatus: (val) { if (val == 'done') setState(() => _isListening = false); },
+        onError: (val) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Mic Error: \${val.errorMsg}"))),
+      );
+      
       if (available) {
         setState(() => _isListening = true);
-        _speech.listen(onResult: (val) => setState(() => _c.text = val.recognizedWords));
+        _speech.listen(onResult: (val) {
+          setState(() { _c.text = val.recognizedWords; });
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Your phone does not support Speech-to-Text.")));
       }
     } else {
       setState(() => _isListening = false);
@@ -38,7 +68,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // SEND & SPEAK FUNCTION
   void _send() async {
     if (_c.text.isEmpty) return;
     String text = _c.text; _c.clear();
@@ -48,8 +77,8 @@ class _ChatScreenState extends State<ChatScreen> {
     String reply = await ApiService.sendChatMessage(text);
     setState(() { _msgs.add({"role": "ai", "text": reply}); _isLoading = false; });
     
-    // Actually speak the reply!
-    await _tts.speak(reply);
+    // Auto-speak AI reply
+    _speak(reply);
   }
 
   @override
@@ -66,14 +95,14 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Container(
                 margin: const EdgeInsets.symmetric(vertical: 4), padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: isMe ? Theme.of(context).colorScheme.primary : Colors.grey.shade100,
+                  color: isMe ? const Color(0xFF58CC02) : Colors.grey.shade100,
                   border: isMe ? null : Border.all(color: Colors.grey.shade300),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (!isMe) IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue), onPressed: () => _tts.speak(_msgs[i]['text']!)),
+                    if (!isMe) IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue), onPressed: () => _speak(_msgs[i]['text']!)),
                     if (!isMe) const SizedBox(width: 8),
                     Flexible(child: Text(_msgs[i]['text']!, style: TextStyle(color: isMe ? Colors.white : Colors.black87, fontSize: 16))),
                   ],
@@ -94,7 +123,7 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(width: 12),
             Expanded(child: TextField(controller: _c, decoration: InputDecoration(hintText: "Type or speak...", border: OutlineInputBorder(borderRadius: BorderRadius.circular(30)), contentPadding: const EdgeInsets.symmetric(horizontal: 20)))),
             const SizedBox(width: 12),
-            CircleAvatar(radius: 25, backgroundColor: Theme.of(context).colorScheme.primary, child: IconButton(icon: const Icon(Icons.send, color: Colors.white), onPressed: _send))
+            CircleAvatar(radius: 25, backgroundColor: const Color(0xFF58CC02), child: IconButton(icon: const Icon(Icons.send, color: Colors.white), onPressed: _send))
           ]),
         )
       ]),
