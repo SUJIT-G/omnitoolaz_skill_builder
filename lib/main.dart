@@ -23,8 +23,13 @@ class OmniToolazApp extends StatelessWidget {
       title: 'OmniToolaz',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF58CC02), primary: const Color(0xFF58CC02), tertiary: const Color(0xFFFFC800)),
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: Colors.white,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF58CC02), // Duolingo Green
+          primary: const Color(0xFF58CC02),
+          secondary: const Color(0xFF1CB0F6), // Blue
+        ),
       ),
       home: const MainNavigation(),
     );
