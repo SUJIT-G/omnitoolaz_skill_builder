@@ -9,39 +9,39 @@ import '../api/api_service.dart';
 class ChatScreen extends StatefulWidget { const ChatScreen({super.key}); @override State<ChatScreen> createState() => _ChatScreenState(); }
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _c = TextEditingController();
-  final List<Map<String, String>> _msgs = [{"role": "ai", "text": "Hi! I am Nova. Let's speak English, Hindi, or Bengali! Tap the mic to talk."}];
+  final List<Map<String, String>> _msgs = [{"role": "ai", "text": "नमस्ते! मैं आपको English बोलना सिखाऊंगी। (Hi! I will teach you English.)"}];
   
   final FlutterTts _tts = FlutterTts();
   final stt.SpeechToText _speech = stt.SpeechToText();
   
   bool _isLoading = false;
   bool _isListening = false;
+  
+  // Native Language Settings
+  String _selectedLangName = "Hindi";
+  String _selectedLangCode = "hi-IN";
 
-  @override
-  void initState() {
-    super.initState();
-    _initTts();
-  }
+  final Map<String, String> _languages = {
+    "Hindi": "hi-IN",
+    "Bengali": "bn-IN",
+    "Marathi": "mr-IN",
+    "Gujarati": "gu-IN",
+    "English": "en-IN",
+  };
 
-  // Safely initialize speaker
+  @override void initState() { super.initState(); _initTts(); }
+
   void _initTts() async {
-    await _tts.setLanguage("en-US");
+    await _tts.setLanguage(_selectedLangCode);
     await _tts.setSpeechRate(0.5);
-    await _tts.setVolume(1.0);
   }
 
-  // Safely trigger speaker
   void _speak(String text) async {
-    try {
-      await _tts.speak(text);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error: Could not play audio.")));
-    }
+    await _tts.setLanguage(_selectedLangCode);
+    await _tts.speak(text);
   }
 
-  // Safely trigger microphone with permissions popup
   void _listen() async {
-    // 1. Force the Android Permission Popup!
     PermissionStatus status = await Permission.microphone.request();
     if (status != PermissionStatus.granted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Microphone permission denied!")));
@@ -51,16 +51,12 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!_isListening) {
       bool available = await _speech.initialize(
         onStatus: (val) { if (val == 'done') setState(() => _isListening = false); },
-        onError: (val) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Mic Error: \${val.errorMsg}"))),
+        onError: (val) => print("Mic Error: $val"),
       );
-      
       if (available) {
         setState(() => _isListening = true);
-        _speech.listen(onResult: (val) {
-          setState(() { _c.text = val.recognizedWords; });
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Your phone does not support Speech-to-Text.")));
+        // Listen in the user's selected native language!
+        _speech.listen(localeId: _selectedLangCode, onResult: (val) => setState(() => _c.text = val.recognizedWords));
       }
     } else {
       setState(() => _isListening = false);
@@ -74,17 +70,35 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() { _msgs.add({"role": "user", "text": text}); _isLoading = true; });
     context.read<GameManager>().addXP(20); 
     
-    String reply = await ApiService.sendChatMessage(text);
+    // Send to AI with native language context
+    String reply = await ApiService.sendChatMessage(text, _selectedLangName);
     setState(() { _msgs.add({"role": "ai", "text": reply}); _isLoading = false; });
-    
-    // Auto-speak AI reply
-    _speak(reply);
+    _speak(reply); // Auto-speak reply
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Speak with Nova AI'), backgroundColor: Colors.white, foregroundColor: Colors.black, elevation: 1),
+      appBar: AppBar(
+        title: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: _selectedLangName,
+            icon: const Icon(Icons.language, color: Colors.blue),
+            items: _languages.keys.map((String lang) {
+              return DropdownMenuItem<String>(value: lang, child: Text("I speak: $lang", style: const TextStyle(fontWeight: FontWeight.bold)));
+            }).toList(),
+            onChanged: (String? newVal) {
+              setState(() {
+                _selectedLangName = newVal!;
+                _selectedLangCode = _languages[newVal]!;
+                _initTts();
+                _msgs.add({"role": "ai", "text": "Great! I will teach you English and explain things in $_selectedLangName."});
+              });
+            },
+          ),
+        ),
+        backgroundColor: Colors.white, elevation: 1,
+      ),
       body: Column(children: [
         Expanded(child: ListView.builder(
           padding: const EdgeInsets.all(16), itemCount: _msgs.length,
@@ -113,8 +127,7 @@ class _ChatScreenState extends State<ChatScreen> {
         )),
         if (_isLoading) const Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator()),
         Container(
-          padding: const EdgeInsets.all(16),
-          color: Colors.white,
+          padding: const EdgeInsets.all(16), color: Colors.white,
           child: Row(children: [
             GestureDetector(
               onTap: _listen,
