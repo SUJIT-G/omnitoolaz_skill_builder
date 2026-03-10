@@ -7,7 +7,14 @@ import 'screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(); // START FIREBASE
+  
+  // Try to start Firebase, but DO NOT crash if it fails
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    print("Firebase Warning: \$e");
+  }
+  
   final prefs = await SharedPreferences.getInstance();
   runApp(
     MultiProvider(
